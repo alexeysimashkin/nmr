@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  role      String    @default("admin")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Booking {
+  id              String         @id @default(cuid())
+  bookingCode     String         @unique
+  lastName        String
+  firstName       String
+  middleName      String?
+  flightNumber    String
+  departureDate   DateTime
+  departureTime   DateTime
+  arrivalTime     DateTime
+  originCity      String
+  originCode      String
+  destinationCity String
+  destinationCode String
+  checkInDesks    String?
+  gate            String?
+  boardingType    String?
+  
+  isCheckedIn     Boolean        @default(false)
+  checkInClosed   Boolean        @default(false)
+  isBoarding      Boolean        @default(false)
+  boardingClosed  Boolean        @default(false)
+  hasDeparted     Boolean        @default(false)
+  actualDeparture DateTime?
+  
+  isDelayed       Boolean        @default(false)
+  delayedUntil    DateTime?
+  
+  hotelAddress    String?
+  hotelRoom       String?
+  
+  notifications   Notification[]
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
