@@ -8,12 +8,12 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
+  id        String   @id @default(cuid())
+  email     String   @unique
   password  String
-  role      String    @default("admin")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Booking {
@@ -34,6 +34,7 @@ model Booking {
   gate            String?
   boardingType    String?
   
+  // Статусы регистрации и посадки
   isCheckedIn     Boolean        @default(false)
   checkInClosed   Boolean        @default(false)
   isBoarding      Boolean        @default(false)
@@ -41,20 +42,22 @@ model Booking {
   hasDeparted     Boolean        @default(false)
   actualDeparture DateTime?
   
+  // Задержка и отель
   isDelayed       Boolean        @default(false)
   delayedUntil    DateTime?
-  
   hotelAddress    String?
   hotelRoom       String?
   
-  // Новые поля
+  // Перенаправление
   isDiverted      Boolean        @default(false)
   divertedToCity  String?
   divertedToCode  String?
   
+  // Сигнал бедствия
   isDistress      Boolean        @default(false)
   distressCode    String?
   
+  // Связь с уведомлениями
   notifications   Notification[]
   
   createdAt       DateTime       @default(now())
