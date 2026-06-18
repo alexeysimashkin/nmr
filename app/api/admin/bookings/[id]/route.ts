@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { getNotificationMessage } from '@/lib/notificationMessages'
 
 export async function GET(
   request: Request,
@@ -48,22 +47,55 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  console.log('=== PUT START ===')
+  console.log('Booking ID:', params.id)
+  
   try {
+    // Проверяем токен
     const token = getTokenFromRequest(request as any)
+    console.log('Token:', token ? 'present' : 'missing')
+    
     const decoded = verifyToken(token || '')
+    console.log('Decoded:', decoded ? 'valid' : 'invalid')
 
     if (!decoded || decoded.role !== 'admin') {
+      console.log('Auth failed')
       return NextResponse.json(
         { error: 'Не авторизован' },
         { status: 401 }
       )
     }
 
-    const updates = await request.json()
+    // Парсим тело запроса
+    let updates: any
+    try {
+      updates = await request.json()
+      console.log('Updates received, keys:', Object.keys(updates))
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      return NextResponse.json(
+        { error: 'Неверный формат данных' },
+        { status: 400 }
+      )
+    }
     
-    const currentBooking = await prisma.booking.findUnique({
-      where: { id: params.id }
-    })
+    // Проверяем что бронирование существует
+    let currentBooking
+    try {
+      currentBooking = await prisma.booking.findUnique({
+        where: { id: params.id }
+      })
+      console.log('Current booking found:', !!currentBooking)
+    } catch (findError: any) {
+      console.error('Find booking error:', findError)
+      return NextResponse.json(
+        { 
+          error: 'Ошибка поиска бронирования', 
+          details: findError?.message || 'Неизвестная ошибка' 
+        },
+        { status: 500 }
+      )
+    }
 
     if (!currentBooking) {
       return NextResponse.json(
@@ -72,205 +104,97 @@ export async function PUT(
       )
     }
 
-    const notifications: any[] = []
-
-    // Проверяем изменения стоек регистрации
-    if (updates.checkInDesks !== undefined && updates.checkInDesks !== currentBooking.checkInDesks) {
-      notifications.push({
-        message: getNotificationMessage('checkin_desks_changed', { desks: updates.checkInDesks }),
-        type: 'checkin_desks_changed'
-      })
-    }
-
-    // Проверяем изменения выхода на посадку
-    if (updates.gate !== undefined && updates.gate !== currentBooking.gate) {
-      notifications.push({
-        message: getNotificationMessage('gate_changed', { 
-          gate: updates.gate, 
-          boardingType: updates.boardingType || currentBooking.boardingType 
-        }),
-        type: 'gate_changed'
-      })
-    }
-
-    // Проверяем изменение времени
-    if ((updates.departureTime && updates.departureTime !== currentBooking.departureTime) ||
-        (updates.arrivalTime && updates.arrivalTime !== currentBooking.arrivalTime)) {
-      notifications.push({
-        message: getNotificationMessage('time_changed'),
-        type: 'time_changed'
-      })
-    }
-
-    // Проверяем задержку рейса
-    if (updates.isDelayed === true && !currentBooking.isDelayed) {
-      notifications.push({
-        message: getNotificationMessage('flight_delayed', { 
-          delayedUntil: updates.delayedUntil 
-        }),
-        type: 'flight_delayed'
-      })
-    }
-
-    // Проверяем отмену задержки
-    if (updates.isDelayed === false && currentBooking.isDelayed) {
-      notifications.push({
-        message: 'Задержка рейса отменена',
-        type: 'time_changed'
-      })
-    }
-
-    // Проверяем предоставление отеля
-    if (updates.hotelAddress !== undefined && 
-        updates.hotelAddress !== currentBooking.hotelAddress && 
-        updates.hotelAddress) {
-      notifications.push({
-        message: getNotificationMessage('hotel_provided', {
-          hotelAddress: updates.hotelAddress,
-          hotelRoom: updates.hotelRoom || currentBooking.hotelRoom
-        }),
-        type: 'hotel_provided'
-      })
-    }
-
-    // Проверяем удаление отеля
-    if (updates.hotelAddress === null && currentBooking.hotelAddress) {
-      notifications.push({
-        message: 'Информация об отеле удалена',
-        type: 'time_changed'
-      })
-    }
-
-    // Проверяем начало регистрации
-    if (updates.isCheckedIn === true && !currentBooking.isCheckedIn) {
-      notifications.push({
-        message: getNotificationMessage('checkin_opened', { 
-          desks: updates.checkInDesks || currentBooking.checkInDesks 
-        }),
-        type: 'checkin_opened'
-      })
-    }
-
-    // Проверяем окончание регистрации
-    if (updates.checkInClosed === true && !currentBooking.checkInClosed) {
-      notifications.push({
-        message: getNotificationMessage('checkin_closed'),
-        type: 'checkin_closed'
-      })
-    }
-
-    // Проверяем начало посадки
-    if (updates.isBoarding === true && !currentBooking.isBoarding) {
-      notifications.push({
-        message: getNotificationMessage('boarding_started', { 
-          gate: updates.gate || currentBooking.gate 
-        }),
-        type: 'boarding_started'
-      })
-    }
-
-    // Проверяем окончание посадки
-    if (updates.boardingClosed === true && !currentBooking.boardingClosed) {
-      notifications.push({
-        message: getNotificationMessage('boarding_closed'),
-        type: 'boarding_closed'
-      })
-    }
-
-    // Проверяем вылет
-    if (updates.hasDeparted === true && !currentBooking.hasDeparted) {
-      notifications.push({
-        message: getNotificationMessage('flight_departed', {
-          actualDeparture: updates.actualDeparture || new Date()
-        }),
-        type: 'flight_departed'
-      })
-    }
-
-    // Проверяем перенаправление
-    if (updates.isDiverted === true && !currentBooking.isDiverted) {
-      notifications.push({
-        message: getNotificationMessage('flight_diverted', {
-          city: updates.divertedToCity,
-          code: updates.divertedToCode
-        }),
-        type: 'flight_diverted'
-      })
-    }
-
-    // Проверяем отмену перенаправления
-    if (updates.isDiverted === false && currentBooking.isDiverted) {
-      notifications.push({
-        message: 'Перенаправление рейса отменено',
-        type: 'time_changed'
-      })
-    }
-
-    // Проверяем сигнал бедствия
-    if (updates.isDistress === true && !currentBooking.isDistress) {
-      notifications.push({
-        message: getNotificationMessage('flight_distress', {
-          distressCode: updates.distressCode
-        }),
-        type: 'flight_distress'
-      })
-    }
-
-    // Проверяем отмену сигнала бедствия
-    if (updates.isDistress === false && currentBooking.isDistress) {
-      notifications.push({
-        message: 'Сигнал бедствия отменён. Рейс в безопасности.',
-        type: 'time_changed'
-      })
-    }
-
-    // Подготавливаем данные для обновления
+    // Собираем только те поля которые пришли
     const updateData: any = {}
     
-    const allowedFields = [
+    // Текстовые поля
+    const textFields = [
       'lastName', 'firstName', 'middleName', 'flightNumber',
-      'departureDate', 'departureTime', 'arrivalTime',
       'originCity', 'originCode', 'destinationCity', 'destinationCode',
       'checkInDesks', 'gate', 'boardingType',
-      'isCheckedIn', 'checkInClosed', 'isBoarding', 'boardingClosed',
-      'hasDeparted', 'actualDeparture',
-      'isDelayed', 'delayedUntil',
       'hotelAddress', 'hotelRoom',
-      'isDiverted', 'divertedToCity', 'divertedToCode',
-      'isDistress', 'distressCode'
+      'divertedToCity', 'divertedToCode', 'distressCode'
     ]
     
-    for (const field of allowedFields) {
+    for (const field of textFields) {
       if (updates[field] !== undefined) {
         updateData[field] = updates[field]
       }
     }
 
-    // Обновляем бронирование с уведомлениями
-    const booking = await prisma.booking.update({
-      where: { id: params.id },
-      data: {
-        ...updateData,
-        ...(notifications.length > 0 && {
-          notifications: {
-            create: notifications
-          }
-        })
-      },
-      include: {
-        notifications: {
-          orderBy: { createdAt: 'desc' }
-        }
+    // Поля дат
+    if (updates.departureDate !== undefined) {
+      updateData.departureDate = new Date(updates.departureDate)
+    }
+    if (updates.departureTime !== undefined) {
+      updateData.departureTime = new Date(updates.departureTime)
+    }
+    if (updates.arrivalTime !== undefined) {
+      updateData.arrivalTime = new Date(updates.arrivalTime)
+    }
+    if (updates.actualDeparture !== undefined) {
+      updateData.actualDeparture = updates.actualDeparture ? new Date(updates.actualDeparture) : null
+    }
+    if (updates.delayedUntil !== undefined) {
+      updateData.delayedUntil = updates.delayedUntil ? new Date(updates.delayedUntil) : null
+    }
+
+    // Булевые поля
+    const boolFields = [
+      'isCheckedIn', 'checkInClosed', 'isBoarding', 'boardingClosed',
+      'hasDeparted', 'isDelayed', 'isDiverted', 'isDistress'
+    ]
+    
+    for (const field of boolFields) {
+      if (updates[field] !== undefined) {
+        updateData[field] = updates[field]
       }
-    })
+    }
+
+    console.log('Update data prepared:', JSON.stringify(updateData, null, 2))
+
+    // Пробуем обновить
+    let booking
+    try {
+      booking = await prisma.booking.update({
+        where: { id: params.id },
+        data: updateData,
+        include: {
+          notifications: {
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      })
+      console.log('Update successful!')
+    } catch (updateError: any) {
+      console.error('!!! Prisma update error !!!')
+      console.error('Message:', updateError?.message)
+      console.error('Code:', updateError?.code)
+      console.error('Meta:', JSON.stringify(updateError?.meta))
+      
+      return NextResponse.json(
+        { 
+          error: 'Ошибка обновления в базе данных',
+          details: updateError?.message || 'Неизвестная ошибка Prisma',
+          code: updateError?.code || 'unknown',
+          meta: updateError?.meta ? JSON.stringify(updateError.meta) : null
+        },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({ booking })
+    
   } catch (error: any) {
-    console.error('Update booking error:', error)
+    console.error('!!! General error !!!')
+    console.error('Error:', error)
+    console.error('Message:', error?.message)
+    console.error('Stack:', error?.stack)
+    
     return NextResponse.json(
       { 
-        error: 'Ошибка обновления бронирования',
-        details: error?.message || 'Неизвестная ошибка'
+        error: 'Внутренняя ошибка сервера',
+        details: error?.message || String(error)
       },
       { status: 500 }
     )
