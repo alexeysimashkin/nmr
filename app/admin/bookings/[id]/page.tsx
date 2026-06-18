@@ -40,6 +40,43 @@ interface Booking {
   notifications: any[]
 }
 
+function InfoField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-sm text-gray-600">{label}</p>
+      <p className={`font-medium ${mono ? 'font-mono' : ''}`}>{value}</p>
+    </div>
+  )
+}
+
+function StatusButton({ 
+  active, 
+  activeText, 
+  inactiveText, 
+  activeColor, 
+  onClick, 
+  disabled 
+}: { 
+  active: boolean
+  activeText: string
+  inactiveText: string
+  activeColor: string
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full px-4 py-3 rounded-lg text-left transition-colors disabled:opacity-50 ${
+        active ? activeColor : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+      }`}
+    >
+      {active ? activeText : inactiveText}
+    </button>
+  )
+}
+
 export default function EditBooking() {
   const params = useParams()
   const router = useRouter()
@@ -48,7 +85,6 @@ export default function EditBooking() {
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('info')
 
-  // Состояния для формы редактирования
   const [editForm, setEditForm] = useState({
     lastName: '',
     firstName: '',
@@ -66,24 +102,13 @@ export default function EditBooking() {
     boardingType: 'jetbridge',
   })
 
-  // Состояния для задержки
   const [delayedUntil, setDelayedUntil] = useState('')
-  
-  // Состояния для отеля
   const [hotelAddress, setHotelAddress] = useState('')
   const [hotelRoom, setHotelRoom] = useState('')
-  
-  // Состояния для вылета
   const [actualDeparture, setActualDeparture] = useState('')
-  
-  // Состояния для перенаправления
   const [divertedToCity, setDivertedToCity] = useState('')
   const [divertedToCode, setDivertedToCode] = useState('')
-  
-  // Состояния для сигнала бедствия
   const [distressCode, setDistressCode] = useState('')
-
-  // Состояния для модальных окон
   const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
@@ -102,7 +127,6 @@ export default function EditBooking() {
       const data = await response.json()
       setBooking(data.booking)
       
-      // Заполняем форму редактирования
       setEditForm({
         lastName: data.booking.lastName,
         firstName: data.booking.firstName,
@@ -162,7 +186,6 @@ export default function EditBooking() {
     }
   }
 
-  // Редактирование основной информации
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateBookingStatus({
@@ -184,7 +207,6 @@ export default function EditBooking() {
     setShowEditModal(false)
   }
 
-  // Задержка рейса (без отеля)
   const handleDelaySubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateBookingStatus({
@@ -193,7 +215,6 @@ export default function EditBooking() {
     })
   }
 
-  // Отель (отдельно от задержки)
   const handleHotelSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateBookingStatus({
@@ -202,7 +223,6 @@ export default function EditBooking() {
     })
   }
 
-  // Вылет
   const handleDepartureSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateBookingStatus({
@@ -211,7 +231,6 @@ export default function EditBooking() {
     })
   }
 
-  // Перенаправление
   const handleDivertSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!divertedToCity || !divertedToCode) {
@@ -225,7 +244,6 @@ export default function EditBooking() {
     })
   }
 
-  // Сигнал бедствия
   const handleDistressSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!distressCode) {
@@ -280,7 +298,6 @@ export default function EditBooking() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
@@ -311,7 +328,6 @@ export default function EditBooking() {
             </div>
           </div>
 
-          {/* Табы */}
           <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
             {tabs.map(tab => (
               <button
@@ -331,7 +347,6 @@ export default function EditBooking() {
       </header>
 
       <main className="max-w-7xl mx-auto p-4">
-        {/* Статусы */}
         <div className="flex flex-wrap gap-2 mb-6">
           {booking.isDistress && (
             <span className="px-3 py-1 bg-red-600 text-white rounded-full text-sm font-bold animate-pulse">
@@ -360,7 +375,6 @@ export default function EditBooking() {
           )}
         </div>
 
-        {/* Контент табов */}
         {activeTab === 'info' && (
           <div className="card">
             <h2 className="text-xl font-semibold mb-4">Информация о рейсе</h2>
@@ -429,7 +443,7 @@ export default function EditBooking() {
             {!booking.isDelayed ? (
               <form onSubmit={handleDelaySubmit} className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Установите задержку рейса. Отель можно добавить отдельно на вкладке "Отель".
+                  Установите задержку рейса. Отель можно добавить отдельно на вкладке &quot;Отель&quot;.
                 </p>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -669,7 +683,6 @@ export default function EditBooking() {
           </div>
         )}
 
-        {/* История уведомлений */}
         {booking.notifications && booking.notifications.length > 0 && (
           <div className="card mt-6">
             <h2 className="text-xl font-semibold mb-4">📢 История уведомлений</h2>
@@ -687,7 +700,6 @@ export default function EditBooking() {
         )}
       </main>
 
-      {/* Модальное окно редактирования */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -791,24 +803,3 @@ export default function EditBooking() {
     </div>
   )
 }
-
-// Вспомогательные компоненты
-function InfoField({ label, value, mono }: { label: string, value: string, mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-sm text-gray-600">{label}</p>
-      <p className={`font-medium ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
-  )
-}
-
-function StatusButton({ active, activeText, inactiveText, activeColor, onClick, disabled }: any) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full px-4 py-3 rounded-lg text-left transition-colors disabled:opacity-50 ${
-        active ? activeColor : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-      }`}
-    >
-      {active ? activeText : inactive
