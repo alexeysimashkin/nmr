@@ -48,7 +48,6 @@ export async function POST(request: Request) {
 
     const data = await request.json()
     
-    // Проверка обязательных полей
     const requiredFields = [
       'lastName', 'firstName', 'flightNumber', 
       'departureDate', 'departureTime', 'arrivalTime',
@@ -64,7 +63,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Генерируем уникальный код бронирования
     let bookingCode = ''
     let isUnique = false
     let attempts = 0
@@ -87,7 +85,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Создаём бронирование
     const booking = await prisma.booking.create({
       data: {
         bookingCode,
@@ -112,7 +109,6 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Create booking error:', error)
     
-    // Детальная информация об ошибке
     let errorMessage = 'Ошибка создания бронирования'
     
     if (error?.code === 'P2002') {
