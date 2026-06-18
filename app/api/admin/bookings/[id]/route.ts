@@ -93,7 +93,7 @@ export async function PUT(
       })
     }
 
-    // Проверяем изменение времени вылета/прилёта
+    // Проверяем изменение времени
     if ((updates.departureTime && updates.departureTime !== currentBooking.departureTime) ||
         (updates.arrivalTime && updates.arrivalTime !== currentBooking.arrivalTime)) {
       notifications.push({
@@ -115,19 +115,18 @@ export async function PUT(
     // Проверяем отмену задержки
     if (updates.isDelayed === false && currentBooking.isDelayed) {
       notifications.push({
-        message: 'Задержка рейса отменена. Актуальное время вылета: ' + 
-          new Date(currentBooking.departureTime).toLocaleTimeString('ru-RU'),
+        message: 'Задержка рейса отменена',
         type: 'time_changed'
       })
     }
 
-    // Проверяем предоставление отеля (отдельно от задержки)
+    // Проверяем предоставление отеля
     if (updates.hotelAddress !== undefined && 
         updates.hotelAddress !== currentBooking.hotelAddress && 
-        updates.hotelAddress !== null) {
+        updates.hotelAddress) {
       notifications.push({
         message: getNotificationMessage('hotel_provided', {
-          hotelAddress: updates.hotelAddress || currentBooking.hotelAddress,
+          hotelAddress: updates.hotelAddress,
           hotelRoom: updates.hotelRoom || currentBooking.hotelRoom
         }),
         type: 'hotel_provided'
@@ -188,15 +187,7 @@ export async function PUT(
       })
     }
 
-    // Проверяем отмену вылета
-    if (updates.hasDeparted === false && currentBooking.hasDeparted) {
-      notifications.push({
-        message: 'Отметка о вылете отменена',
-        type: 'time_changed'
-      })
-    }
-
-    // Проверяем перенаправление в другой аэропорт
+    // Проверяем перенаправление
     if (updates.isDiverted === true && !currentBooking.isDiverted) {
       notifications.push({
         message: getNotificationMessage('flight_diverted', {
@@ -210,7 +201,7 @@ export async function PUT(
     // Проверяем отмену перенаправления
     if (updates.isDiverted === false && currentBooking.isDiverted) {
       notifications.push({
-        message: 'Перенаправление рейса отменено. Самолёт следует по маршруту.',
+        message: 'Перенаправление рейса отменено',
         type: 'time_changed'
       })
     }
@@ -233,14 +224,38 @@ export async function PUT(
       })
     }
 
+    // Подготавливаем данные для обновления
+    const updateData: any = {}
+    
+    const allowedFields = [
+      'lastName', 'firstName', 'middleName', 'flightNumber',
+      'departureDate', 'departureTime', 'arrivalTime',
+      'originCity', 'originCode', 'destinationCity', 'destinationCode',
+      'checkInDesks', 'gate', 'boardingType',
+      'isCheckedIn', 'checkInClosed', 'isBoarding', 'boardingClosed',
+      'hasDeparted', 'actualDeparture',
+      'isDelayed', 'delayedUntil',
+      'hotelAddress', 'hotelRoom',
+      'isDiverted', 'divertedToCity', 'divertedToCode',
+      'isDistress', 'distressCode'
+    ]
+    
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        updateData[field] = updates[field]
+      }
+    }
+
     // Обновляем бронирование с уведомлениями
     const booking = await prisma.booking.update({
       where: { id: params.id },
       data: {
-        ...updates,
-        notifications: {
-          create: notifications
-        }
+        ...updateData,
+        ...(notifications.length > 0 && {
+          notifications: {
+            create: notifications
+          }
+        })
       },
       include: {
         notifications: {
@@ -250,10 +265,13 @@ export async function PUT(
     })
 
     return NextResponse.json({ booking })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update booking error:', error)
     return NextResponse.json(
-      { error: 'Ошибка обновления бронирования' },
+      { 
+        error: 'Ошибка обновления бронирования',
+        details: error?.message || 'Неизвестная ошибка'
+      },
       { status: 500 }
     )
   }
