@@ -12,7 +12,6 @@ export async function POST() {
     if (!existingBooking) {
       await prisma.booking.create({
         data: {
-          id: 'booking001',
           bookingCode: 'TEST01',
           lastName: 'Иванов',
           firstName: 'Иван',
@@ -32,11 +31,15 @@ export async function POST() {
       })
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: String(error)
+    return NextResponse.json({ 
+      success: true,
+      message: 'Тестовое бронирование создано'
+    })
+  } catch (error: any) {
+    console.error('Create booking error:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: error?.message || String(error)
     })
   } finally {
     await prisma.$disconnect()
