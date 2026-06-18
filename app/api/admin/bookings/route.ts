@@ -48,24 +48,81 @@ export async function POST(request: Request) {
 
     const data = await request.json()
     
-    // Генерируем код бронирования
-    const bookingCode = generateBookingCode()
+    // Проверка обязательных полей
+    const requiredFields = [
+      'lastName', 'firstName', 'flightNumber', 
+      'departureDate', 'departureTime', 'arrivalTime',
+      'originCity', 'originCode', 'destinationCity', 'destinationCode'
+    ]
     
+    const missingFields = requiredFields.filter(field => !data[field])
+    
+    if (missingFields.length > 0) {
+      return NextResponse.json(
+        { error: `Отсутствуют обязательные поля: ${missingFields.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Генерируем уникальный код бронирования
+    let bookingCode = ''
+    let isUnique = false
+    let attempts = 0
+    
+    while (!isUnique && attempts < 10) {
+      bookingCode = generateBookingCode()
+      const existing = await prisma.booking.findUnique({
+        where: { bookingCode }
+      })
+      if (!existing) {
+        isUnique = true
+      }
+      attempts++
+    }
+
+    if (!isUnique) {
+      return NextResponse.json(
+        { error: 'Не удалось сгенерировать уникальный код бронирования' },
+        { status: 500 }
+      )
+    }
+
+    // Создаём бронирование
     const booking = await prisma.booking.create({
       data: {
-        ...data,
         bookingCode,
+        lastName: data.lastName,
+        firstName: data.firstName,
+        middleName: data.middleName || null,
+        flightNumber: data.flightNumber,
         departureDate: new Date(data.departureDate),
         departureTime: new Date(data.departureTime),
         arrivalTime: new Date(data.arrivalTime),
+        originCity: data.originCity,
+        originCode: data.originCode.toUpperCase(),
+        destinationCity: data.destinationCity,
+        destinationCode: data.destinationCode.toUpperCase(),
+        checkInDesks: data.checkInDesks || null,
+        gate: data.gate || null,
+        boardingType: data.boardingType || 'jetbridge',
       }
     })
 
     return NextResponse.json({ booking }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create booking error:', error)
+    
+    // Детальная информация об ошибке
+    let errorMessage = 'Ошибка создания бронирования'
+    
+    if (error?.code === 'P2002') {
+      errorMessage = 'Бронирование с таким кодом уже существует'
+    } else if (error?.message) {
+      errorMessage = `Ошибка: ${error.message}`
+    }
+    
     return NextResponse.json(
-      { error: 'Ошибка создания бронирования' },
+      { error: errorMessage },
       { status: 500 }
     )
   }
