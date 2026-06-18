@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 export default function CreateBooking() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   
   const [formData, setFormData] = useState({
     lastName: '',
@@ -29,21 +30,58 @@ export default function CreateBooking() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+    setErrorMessage('')
+  }
+
+  const validateForm = () => {
+    const required = [
+      'lastName', 'firstName', 'flightNumber',
+      'departureDate', 'departureTime', 'arrivalTime',
+      'originCity', 'originCode', 'destinationCity', 'destinationCode'
+    ]
+    
+    const missing = required.filter(field => !formData[field as keyof typeof formData])
+    
+    if (missing.length > 0) {
+      setErrorMessage(`Заполните обязательные поля: ${missing.join(', ')}`)
+      return false
+    }
+
+    if (formData.originCode.length !== 3) {
+      setErrorMessage('Код ИАТА аэропорта вылета должен содержать 3 символа')
+      return false
+    }
+
+    if (formData.destinationCode.length !== 3) {
+      setErrorMessage('Код ИАТА аэропорта прилёта должен содержать 3 символа')
+      return false
+    }
+
+    return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) return
+    
     setLoading(true)
+    setErrorMessage('')
 
     try {
       const token = localStorage.getItem('token')
       
-      // Форматируем даты
+      if (!token) {
+        toast.error('Не авторизован. Войдите заново.')
+        router.push('/admin/login')
+        return
+      }
+
       const bookingData = {
         ...formData,
         departureDate: new Date(formData.departureDate).toISOString(),
-        departureTime: new Date(`${formData.departureDate}T${formData.departureTime}`).toISOString(),
-        arrivalTime: new Date(`${formData.departureDate}T${formData.arrivalTime}`).toISOString(),
+        departureTime: new Date(`${formData.departureDate}T${formData.departureTime}:00`).toISOString(),
+        arrivalTime: new Date(`${formData.departureDate}T${formData.arrivalTime}:00`).toISOString(),
         middleName: formData.middleName || null,
         checkInDesks: formData.checkInDesks || null,
         gate: formData.gate || null,
@@ -64,10 +102,12 @@ export default function CreateBooking() {
         throw new Error(data.error || 'Ошибка создания бронирования')
       }
 
-      toast.success('Бронирование создано!')
+      toast.success(`Бронирование создано! Код: ${data.booking.bookingCode}`)
       router.push(`/admin/bookings/${data.booking.id}`)
     } catch (error: any) {
-      toast.error(error.message || 'Ошибка создания бронирования')
+      const msg = error.message || 'Ошибка создания бронирования'
+      setErrorMessage(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -89,13 +129,20 @@ export default function CreateBooking() {
 
       <main className="max-w-4xl mx-auto p-4">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+              <p className="font-medium">Ошибка:</p>
+              <p className="text-sm">{errorMessage}</p>
+            </div>
+          )}
+
           {/* Информация о пассажире */}
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Пассажир</h2>
+            <h2 className="text-xl font-semibold mb-4">👤 Пассажир</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Фамилия *
+                  Фамилия <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -103,12 +150,13 @@ export default function CreateBooking() {
                   value={formData.lastName}
                   onChange={handleChange}
                   className="input-field"
+                  placeholder="Иванов"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Имя *
+                  Имя <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -116,6 +164,7 @@ export default function CreateBooking() {
                   value={formData.firstName}
                   onChange={handleChange}
                   className="input-field"
+                  placeholder="Иван"
                   required
                 />
               </div>
@@ -129,7 +178,7 @@ export default function CreateBooking() {
                   value={formData.middleName}
                   onChange={handleChange}
                   className="input-field"
-                  placeholder="Необязательно"
+                  placeholder="Иванович (необязательно)"
                 />
               </div>
             </div>
@@ -137,11 +186,11 @@ export default function CreateBooking() {
 
           {/* Информация о рейсе */}
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Рейс</h2>
+            <h2 className="text-xl font-semibold mb-4">✈️ Рейс</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Номер рейса *
+                  Номер рейса <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -155,7 +204,7 @@ export default function CreateBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Дата вылета *
+                  Дата вылета <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -168,7 +217,7 @@ export default function CreateBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Время вылета *
+                  Время вылета <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="time"
@@ -181,7 +230,7 @@ export default function CreateBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Время прилёта *
+                  Время прилёта <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="time"
@@ -197,13 +246,13 @@ export default function CreateBooking() {
 
           {/* Маршрут */}
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Маршрут</h2>
+            <h2 className="text-xl font-semibold mb-4">🗺️ Маршрут</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-700">Откуда</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Город *
+                    Город <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -217,18 +266,23 @@ export default function CreateBooking() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Код ИАТА *
+                    Код ИАТА <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     name="originCode"
                     value={formData.originCode}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      e.target.value = e.target.value.toUpperCase()
+                      handleChange(e)
+                    }}
                     className="input-field"
                     placeholder="SVO"
                     maxLength={3}
+                    minLength={3}
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">3 буквы латиницей</p>
                 </div>
               </div>
 
@@ -236,7 +290,7 @@ export default function CreateBooking() {
                 <h3 className="font-medium text-gray-700">Куда</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Город *
+                    Город <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -250,18 +304,23 @@ export default function CreateBooking() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Код ИАТА *
+                    Код ИАТА <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     name="destinationCode"
                     value={formData.destinationCode}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      e.target.value = e.target.value.toUpperCase()
+                      handleChange(e)
+                    }}
                     className="input-field"
                     placeholder="LED"
                     maxLength={3}
+                    minLength={3}
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">3 буквы латиницей</p>
                 </div>
               </div>
             </div>
@@ -269,7 +328,8 @@ export default function CreateBooking() {
 
           {/* Информация в аэропорту */}
           <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Информация в аэропорту</h2>
+            <h2 className="text-xl font-semibold mb-4">🏢 Информация в аэропорту</h2>
+            <p className="text-sm text-gray-600 mb-4">Можно заполнить позже при редактировании</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -321,7 +381,7 @@ export default function CreateBooking() {
               disabled={loading}
               className="btn-primary flex-1 disabled:opacity-50"
             >
-              {loading ? 'Создание...' : 'Создать бронирование'}
+              {loading ? '⏳ Создание...' : '✅ Создать бронирование'}
             </button>
             <Link href="/admin/dashboard" className="btn-secondary">
               Отмена
