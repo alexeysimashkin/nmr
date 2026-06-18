@@ -6,10 +6,12 @@ export async function POST() {
   try {
     await prisma.$connect()
 
+    // Проверяем существует ли админ
     const existingAdmin = await prisma.user.findUnique({
       where: { email: 'admin@aso.ru' }
     })
 
+    // Хешируем пароль
     const hashedPassword = await bcrypt.hash('admin123', 10)
 
     if (existingAdmin) {
@@ -20,7 +22,6 @@ export async function POST() {
     } else {
       await prisma.user.create({
         data: {
-          id: 'admin001',
           email: 'admin@aso.ru',
           password: hashedPassword,
           role: 'admin'
@@ -28,11 +29,15 @@ export async function POST() {
       })
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: String(error)
+    return NextResponse.json({ 
+      success: true,
+      message: 'Администратор создан/обновлен'
+    })
+  } catch (error: any) {
+    console.error('Create admin error:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: error?.message || String(error)
     })
   } finally {
     await prisma.$disconnect()
