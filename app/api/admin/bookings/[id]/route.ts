@@ -61,7 +61,6 @@ export async function PUT(
 
     const updates = await request.json()
     
-    // Получаем текущее бронирование для сравнения
     const currentBooking = await prisma.booking.findUnique({
       where: { id: params.id }
     })
@@ -73,11 +72,10 @@ export async function PUT(
       )
     }
 
-    // Создаём уведомления на основе изменений
-    const notifications = []
+    const notifications: any[] = []
 
     // Проверяем изменения стоек регистрации
-    if (updates.checkInDesks && updates.checkInDesks !== currentBooking.checkInDesks) {
+    if (updates.checkInDesks !== undefined && updates.checkInDesks !== currentBooking.checkInDesks) {
       notifications.push({
         message: getNotificationMessage('checkin_desks_changed', { desks: updates.checkInDesks }),
         type: 'checkin_desks_changed'
@@ -85,7 +83,7 @@ export async function PUT(
     }
 
     // Проверяем изменения выхода на посадку
-    if (updates.gate && updates.gate !== currentBooking.gate) {
+    if (updates.gate !== undefined && updates.gate !== currentBooking.gate) {
       notifications.push({
         message: getNotificationMessage('gate_changed', { 
           gate: updates.gate, 
@@ -95,8 +93,17 @@ export async function PUT(
       })
     }
 
+    // Проверяем изменение времени вылета/прилёта
+    if ((updates.departureTime && updates.departureTime !== currentBooking.departureTime) ||
+        (updates.arrivalTime && updates.arrivalTime !== currentBooking.arrivalTime)) {
+      notifications.push({
+        message: getNotificationMessage('time_changed'),
+        type: 'time_changed'
+      })
+    }
+
     // Проверяем задержку рейса
-    if (updates.isDelayed && !currentBooking.isDelayed) {
+    if (updates.isDelayed === true && !currentBooking.isDelayed) {
       notifications.push({
         message: getNotificationMessage('flight_delayed', { 
           delayedUntil: updates.delayedUntil 
@@ -105,19 +112,38 @@ export async function PUT(
       })
     }
 
-    // Проверяем предоставление отеля
-    if (updates.hotelAddress && updates.hotelAddress !== currentBooking.hotelAddress) {
+    // Проверяем отмену задержки
+    if (updates.isDelayed === false && currentBooking.isDelayed) {
+      notifications.push({
+        message: 'Задержка рейса отменена. Актуальное время вылета: ' + 
+          new Date(currentBooking.departureTime).toLocaleTimeString('ru-RU'),
+        type: 'time_changed'
+      })
+    }
+
+    // Проверяем предоставление отеля (отдельно от задержки)
+    if (updates.hotelAddress !== undefined && 
+        updates.hotelAddress !== currentBooking.hotelAddress && 
+        updates.hotelAddress !== null) {
       notifications.push({
         message: getNotificationMessage('hotel_provided', {
-          hotelAddress: updates.hotelAddress,
-          hotelRoom: updates.hotelRoom
+          hotelAddress: updates.hotelAddress || currentBooking.hotelAddress,
+          hotelRoom: updates.hotelRoom || currentBooking.hotelRoom
         }),
         type: 'hotel_provided'
       })
     }
 
+    // Проверяем удаление отеля
+    if (updates.hotelAddress === null && currentBooking.hotelAddress) {
+      notifications.push({
+        message: 'Информация об отеле удалена',
+        type: 'time_changed'
+      })
+    }
+
     // Проверяем начало регистрации
-    if (updates.isCheckedIn && !currentBooking.isCheckedIn) {
+    if (updates.isCheckedIn === true && !currentBooking.isCheckedIn) {
       notifications.push({
         message: getNotificationMessage('checkin_opened', { 
           desks: updates.checkInDesks || currentBooking.checkInDesks 
@@ -127,7 +153,7 @@ export async function PUT(
     }
 
     // Проверяем окончание регистрации
-    if (updates.checkInClosed && !currentBooking.checkInClosed) {
+    if (updates.checkInClosed === true && !currentBooking.checkInClosed) {
       notifications.push({
         message: getNotificationMessage('checkin_closed'),
         type: 'checkin_closed'
@@ -135,7 +161,7 @@ export async function PUT(
     }
 
     // Проверяем начало посадки
-    if (updates.isBoarding && !currentBooking.isBoarding) {
+    if (updates.isBoarding === true && !currentBooking.isBoarding) {
       notifications.push({
         message: getNotificationMessage('boarding_started', { 
           gate: updates.gate || currentBooking.gate 
@@ -145,7 +171,7 @@ export async function PUT(
     }
 
     // Проверяем окончание посадки
-    if (updates.boardingClosed && !currentBooking.boardingClosed) {
+    if (updates.boardingClosed === true && !currentBooking.boardingClosed) {
       notifications.push({
         message: getNotificationMessage('boarding_closed'),
         type: 'boarding_closed'
@@ -153,12 +179,57 @@ export async function PUT(
     }
 
     // Проверяем вылет
-    if (updates.hasDeparted && !currentBooking.hasDeparted) {
+    if (updates.hasDeparted === true && !currentBooking.hasDeparted) {
       notifications.push({
         message: getNotificationMessage('flight_departed', {
           actualDeparture: updates.actualDeparture || new Date()
         }),
         type: 'flight_departed'
+      })
+    }
+
+    // Проверяем отмену вылета
+    if (updates.hasDeparted === false && currentBooking.hasDeparted) {
+      notifications.push({
+        message: 'Отметка о вылете отменена',
+        type: 'time_changed'
+      })
+    }
+
+    // Проверяем перенаправление в другой аэропорт
+    if (updates.isDiverted === true && !currentBooking.isDiverted) {
+      notifications.push({
+        message: getNotificationMessage('flight_diverted', {
+          city: updates.divertedToCity,
+          code: updates.divertedToCode
+        }),
+        type: 'flight_diverted'
+      })
+    }
+
+    // Проверяем отмену перенаправления
+    if (updates.isDiverted === false && currentBooking.isDiverted) {
+      notifications.push({
+        message: 'Перенаправление рейса отменено. Самолёт следует по маршруту.',
+        type: 'time_changed'
+      })
+    }
+
+    // Проверяем сигнал бедствия
+    if (updates.isDistress === true && !currentBooking.isDistress) {
+      notifications.push({
+        message: getNotificationMessage('flight_distress', {
+          distressCode: updates.distressCode
+        }),
+        type: 'flight_distress'
+      })
+    }
+
+    // Проверяем отмену сигнала бедствия
+    if (updates.isDistress === false && currentBooking.isDistress) {
+      notifications.push({
+        message: 'Сигнал бедствия отменён. Рейс в безопасности.',
+        type: 'time_changed'
       })
     }
 
