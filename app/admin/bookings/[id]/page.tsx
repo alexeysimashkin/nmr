@@ -32,6 +32,11 @@ interface Booking {
   delayedUntil: string | null
   hotelAddress: string | null
   hotelRoom: string | null
+  isDiverted: boolean
+  divertedToCity: string | null
+  divertedToCode: string | null
+  isDistress: boolean
+  distressCode: string | null
   notifications: any[]
 }
 
@@ -42,12 +47,17 @@ export default function EditBooking() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Состояния для управления статусами
+  // Состояния форм
   const [isDelayed, setIsDelayed] = useState(false)
   const [delayedUntil, setDelayedUntil] = useState('')
   const [hotelAddress, setHotelAddress] = useState('')
   const [hotelRoom, setHotelRoom] = useState('')
   const [actualDeparture, setActualDeparture] = useState('')
+  
+  // Новые состояния
+  const [divertedToCity, setDivertedToCity] = useState('')
+  const [divertedToCode, setDivertedToCode] = useState('')
+  const [distressCode, setDistressCode] = useState('')
 
   useEffect(() => {
     loadBooking()
@@ -65,7 +75,6 @@ export default function EditBooking() {
       const data = await response.json()
       setBooking(data.booking)
       
-      // Инициализируем состояния
       setIsDelayed(data.booking.isDelayed)
       setDelayedUntil(data.booking.delayedUntil ? 
         new Date(data.booking.delayedUntil).toISOString().slice(0, 16) : '')
@@ -73,6 +82,9 @@ export default function EditBooking() {
       setHotelRoom(data.booking.hotelRoom || '')
       setActualDeparture(data.booking.actualDeparture ? 
         new Date(data.booking.actualDeparture).toISOString().slice(0, 16) : '')
+      setDivertedToCity(data.booking.divertedToCity || '')
+      setDivertedToCode(data.booking.divertedToCode || '')
+      setDistressCode(data.booking.distressCode || '')
     } catch (error) {
       toast.error('Ошибка загрузки бронирования')
       router.push('/admin/dashboard')
@@ -124,6 +136,32 @@ export default function EditBooking() {
     })
   }
 
+  // Новые обработчики
+  const handleDivertSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!divertedToCity || !divertedToCode) {
+      toast.error('Укажите город и код ИАТА аэропорта')
+      return
+    }
+    updateBookingStatus({
+      isDiverted: true,
+      divertedToCity,
+      divertedToCode: divertedToCode.toUpperCase()
+    })
+  }
+
+  const handleDistressSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!distressCode) {
+      toast.error('Укажите код сигнала бедствия')
+      return
+    }
+    updateBookingStatus({
+      isDistress: true,
+      distressCode: distressCode.toUpperCase()
+    })
+  }
+
   const deleteBooking = async () => {
     if (!confirm('Вы уверены, что хотите удалить это бронирование?')) return
 
@@ -172,7 +210,7 @@ export default function EditBooking() {
           <div className="flex space-x-3">
             <button
               onClick={deleteBooking}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
               Удалить
             </button>
@@ -231,6 +269,25 @@ export default function EditBooking() {
               </div>
             )}
           </div>
+
+          {/* Статусы */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {booking.isDiverted && (
+              <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
+                Перенаправлен в {booking.divertedToCity} ({booking.divertedToCode})
+              </span>
+            )}
+            {booking.isDistress && (
+              <span className="px-3 py-1 bg-red-600 text-white rounded-full text-sm font-medium animate-pulse">
+                ⚠ Сигнал бедствия: {booking.distressCode}
+              </span>
+            )}
+            {booking.isDelayed && (
+              <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+                Задержан
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Управление статусами */}
@@ -244,9 +301,9 @@ export default function EditBooking() {
                   isCheckedIn: !booking.isCheckedIn 
                 })}
                 disabled={saving}
-                className={`w-full px-4 py-2 rounded-lg text-left transition-colors ${
+                className={`w-full px-4 py-2 rounded-lg text-left ${
                   booking.isCheckedIn 
-                    ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                    ? 'bg-green-100 text-green-800' 
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                 }`}
               >
@@ -258,11 +315,11 @@ export default function EditBooking() {
                   checkInClosed: !booking.checkInClosed 
                 })}
                 disabled={saving || !booking.isCheckedIn}
-                className={`w-full px-4 py-2 rounded-lg text-left transition-colors ${
+                className={`w-full px-4 py-2 rounded-lg text-left disabled:opacity-50 ${
                   booking.checkInClosed 
                     ? 'bg-gray-200 text-gray-800' 
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                } disabled:opacity-50`}
+                }`}
               >
                 {booking.checkInClosed ? '🔒 Регистрация закончена' : 'Закрыть регистрацию'}
               </button>
@@ -272,9 +329,9 @@ export default function EditBooking() {
                   isBoarding: !booking.isBoarding 
                 })}
                 disabled={saving}
-                className={`w-full px-4 py-2 rounded-lg text-left transition-colors ${
+                className={`w-full px-4 py-2 rounded-lg text-left ${
                   booking.isBoarding 
-                    ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' 
+                    ? 'bg-blue-100 text-blue-800' 
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                 }`}
               >
@@ -286,11 +343,11 @@ export default function EditBooking() {
                   boardingClosed: !booking.boardingClosed 
                 })}
                 disabled={saving || !booking.isBoarding}
-                className={`w-full px-4 py-2 rounded-lg text-left transition-colors ${
+                className={`w-full px-4 py-2 rounded-lg text-left disabled:opacity-50 ${
                   booking.boardingClosed 
                     ? 'bg-orange-100 text-orange-800' 
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                } disabled:opacity-50`}
+                }`}
               >
                 {booking.boardingClosed ? '🔒 Посадка закончена' : 'Закрыть посадку'}
               </button>
@@ -371,6 +428,122 @@ export default function EditBooking() {
           </div>
         </div>
 
+        {/* НОВАЯ СЕКЦИЯ: Перенаправление в другой аэропорт */}
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-4">🔄 Перенаправление рейса</h2>
+          
+          {!booking.isDiverted ? (
+            <form onSubmit={handleDivertSubmit} className="space-y-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Укажите аэропорт, в который перенаправляется самолёт
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Город *
+                  </label>
+                  <input
+                    type="text"
+                    value={divertedToCity}
+                    onChange={(e) => setDivertedToCity(e.target.value)}
+                    className="input-field"
+                    placeholder="Санкт-Петербург"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Код ИАТА *
+                  </label>
+                  <input
+                    type="text"
+                    value={divertedToCode}
+                    onChange={(e) => setDivertedToCode(e.target.value.toUpperCase())}
+                    className="input-field"
+                    placeholder="LED"
+                    maxLength={3}
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary w-full">
+                Подтвердить перенаправление
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <p className="text-orange-800 font-medium text-lg">
+                  ✈️ Самолёт перенаправлен
+                </p>
+                <p className="text-orange-700 mt-2">
+                  В аэропорт: <strong>{booking.divertedToCity} ({booking.divertedToCode})</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => updateBookingStatus({ isDiverted: false, divertedToCity: null, divertedToCode: null })}
+                disabled={saving}
+                className="btn-secondary w-full"
+              >
+                Отменить перенаправление
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* НОВАЯ СЕКЦИЯ: Сигнал бедствия */}
+        <div className="card border-2 border-red-200">
+          <h2 className="text-xl font-semibold mb-4 text-red-800">⚠️ Сигнал бедствия</h2>
+          
+          {!booking.isDistress ? (
+            <form onSubmit={handleDistressSubmit} className="space-y-4">
+              <div className="bg-red-50 p-4 rounded-lg mb-4">
+                <p className="text-red-800 text-sm font-medium">
+                  ⚠ Внимание! Сигнал бедствия будет отображаться пассажирам и создаст экстренное уведомление!
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Код сигнала бедствия *
+                </label>
+                <input
+                  type="text"
+                  value={distressCode}
+                  onChange={(e) => setDistressCode(e.target.value.toUpperCase())}
+                  className="input-field text-lg font-mono"
+                  placeholder="7700"
+                  maxLength={4}
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Стандартные коды: 7700 - общая тревога, 7600 - отказ связи, 7500 - захват
+                </p>
+              </div>
+              <button 
+                type="submit" 
+                disabled={saving} 
+                className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-lg"
+              >
+                ⚠ ПОДАТЬ СИГНАЛ БЕДСТВИЯ
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-red-600 text-white p-6 rounded-lg animate-pulse">
+                <p className="text-2xl font-bold mb-2">⚠️ СИГНАЛ БЕДСТВИЯ АКТИВЕН</p>
+                <p className="text-xl font-mono">Код: {booking.distressCode}</p>
+              </div>
+              <button
+                onClick={() => updateBookingStatus({ isDistress: false, distressCode: null })}
+                disabled={saving}
+                className="btn-secondary w-full"
+              >
+                Отменить сигнал бедствия
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Отметка о вылете */}
         {!booking.hasDeparted && (
           <div className="card">
@@ -400,8 +573,16 @@ export default function EditBooking() {
             <h2 className="text-xl font-semibold mb-4">История уведомлений</h2>
             <div className="space-y-2">
               {booking.notifications.map((notification: any) => (
-                <div key={notification.id} className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm">{notification.message}</p>
+                <div key={notification.id} className={`p-3 rounded-lg ${
+                  notification.type === 'flight_distress' 
+                    ? 'bg-red-100 border border-red-300' 
+                    : 'bg-gray-50'
+                }`}>
+                  <p className={`text-sm ${
+                    notification.type === 'flight_distress' ? 'text-red-800 font-medium' : ''
+                  }`}>
+                    {notification.message}
+                  </p>
                   <p className="text-xs text-gray-500 mt-1">
                     {formatDateTime(notification.createdAt)}
                   </p>
