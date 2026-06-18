@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPES = {
   BOARDING_STARTED: 'boarding_started',
   BOARDING_CLOSED: 'boarding_closed',
   FLIGHT_DEPARTED: 'flight_departed',
+  FLIGHT_DIVERTED: 'flight_diverted',
+  FLIGHT_DISTRESS: 'flight_distress',
 } as const
 
 export function getNotificationMessage(type: string, details?: any): string {
@@ -36,6 +38,10 @@ export function getNotificationMessage(type: string, details?: any): string {
       return `Посадка закончена`
     case NOTIFICATION_TYPES.FLIGHT_DEPARTED:
       return `Рейс вылетел в ${details?.actualDeparture ? new Date(details.actualDeparture).toLocaleTimeString('ru-RU') : ''}`
+    case NOTIFICATION_TYPES.FLIGHT_DIVERTED:
+      return `Самолёт перенаправлен в аэропорт ${details?.city || ''} (${details?.code || ''})`
+    case NOTIFICATION_TYPES.FLIGHT_DISTRESS:
+      return `⚠️ САМОЛЁТ ПОДАЛ СИГНАЛ БЕДСТВИЯ! Код: ${details?.distressCode || ''}`
     default:
       return 'Обновление информации о рейсе'
   }
