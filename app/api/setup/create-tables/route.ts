@@ -4,11 +4,29 @@ import { prisma } from '@/lib/prisma'
 export async function POST() {
   try {
     await prisma.$connect()
+    console.log('Connected to database')
 
-    // Удаляем старую таблицу если есть
-    await prisma.$executeRaw`DROP TABLE IF EXISTS "Notification" CASCADE`
-    await prisma.$executeRaw`DROP TABLE IF EXISTS "Booking" CASCADE`
-    await prisma.$executeRaw`DROP TABLE IF EXISTS "User" CASCADE`
+    // Удаляем старые таблицы
+    try {
+      await prisma.$executeRaw`DROP TABLE IF EXISTS "Notification" CASCADE`
+      console.log('Dropped Notification')
+    } catch (e) {
+      console.log('Drop Notification error:', e)
+    }
+    
+    try {
+      await prisma.$executeRaw`DROP TABLE IF EXISTS "Booking" CASCADE`
+      console.log('Dropped Booking')
+    } catch (e) {
+      console.log('Drop Booking error:', e)
+    }
+    
+    try {
+      await prisma.$executeRaw`DROP TABLE IF EXISTS "User" CASCADE`
+      console.log('Dropped User')
+    } catch (e) {
+      console.log('Drop User error:', e)
+    }
 
     // Создаём таблицу User
     await prisma.$executeRaw`
@@ -22,12 +40,13 @@ export async function POST() {
           CONSTRAINT "User_pkey" PRIMARY KEY ("id")
       )
     `
+    console.log('User table created')
 
     await prisma.$executeRaw`
-      CREATE UNIQUE INDEX "User_email_key" ON "User"("email")
+      CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")
     `
 
-    // Создаём таблицу Booking с новыми полями
+    // Создаём таблицу Booking со ВСЕМИ полями
     await prisma.$executeRaw`
       CREATE TABLE "Booking" (
           "id" TEXT NOT NULL,
@@ -66,9 +85,10 @@ export async function POST() {
           CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
       )
     `
+    console.log('Booking table created with all columns')
 
     await prisma.$executeRaw`
-      CREATE UNIQUE INDEX "Booking_bookingCode_key" ON "Booking"("bookingCode")
+      CREATE UNIQUE INDEX IF NOT EXISTS "Booking_bookingCode_key" ON "Booking"("bookingCode")
     `
 
     // Создаём таблицу Notification
@@ -83,6 +103,7 @@ export async function POST() {
           CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
       )
     `
+    console.log('Notification table created')
 
     await prisma.$executeRaw`
       ALTER TABLE "Notification" 
@@ -93,13 +114,13 @@ export async function POST() {
 
     return NextResponse.json({ 
       success: true,
-      message: 'Все таблицы созданы с новыми полями'
+      message: 'Все таблицы пересозданы с новыми полями'
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create tables error:', error)
     return NextResponse.json({ 
       success: false, 
-      error: String(error)
+      error: error?.message || String(error)
     }, { status: 500 })
   } finally {
     await prisma.$disconnect()
