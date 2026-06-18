@@ -66,6 +66,7 @@ function StatusButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={`w-full px-4 py-3 rounded-lg text-left transition-colors disabled:opacity-50 ${
@@ -118,6 +119,11 @@ export default function EditBooking() {
   const loadBooking = async () => {
     try {
       const token = localStorage.getItem('token')
+      if (!token) {
+        router.push('/admin/login')
+        return
+      }
+
       const response = await fetch(`/api/admin/bookings/${params.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -128,17 +134,17 @@ export default function EditBooking() {
       setBooking(data.booking)
       
       setEditForm({
-        lastName: data.booking.lastName,
-        firstName: data.booking.firstName,
+        lastName: data.booking.lastName || '',
+        firstName: data.booking.firstName || '',
         middleName: data.booking.middleName || '',
-        flightNumber: data.booking.flightNumber,
-        departureDate: new Date(data.booking.departureDate).toISOString().split('T')[0],
-        departureTime: new Date(data.booking.departureTime).toTimeString().slice(0,5),
-        arrivalTime: new Date(data.booking.arrivalTime).toTimeString().slice(0,5),
-        originCity: data.booking.originCity,
-        originCode: data.booking.originCode,
-        destinationCity: data.booking.destinationCity,
-        destinationCode: data.booking.destinationCode,
+        flightNumber: data.booking.flightNumber || '',
+        departureDate: data.booking.departureDate ? new Date(data.booking.departureDate).toISOString().split('T')[0] : '',
+        departureTime: data.booking.departureTime ? new Date(data.booking.departureTime).toTimeString().slice(0,5) : '',
+        arrivalTime: data.booking.arrivalTime ? new Date(data.booking.arrivalTime).toTimeString().slice(0,5) : '',
+        originCity: data.booking.originCity || '',
+        originCode: data.booking.originCode || '',
+        destinationCity: data.booking.destinationCity || '',
+        destinationCode: data.booking.destinationCode || '',
         checkInDesks: data.booking.checkInDesks || '',
         gate: data.booking.gate || '',
         boardingType: data.booking.boardingType || 'jetbridge',
@@ -165,6 +171,13 @@ export default function EditBooking() {
     setSaving(true)
     try {
       const token = localStorage.getItem('token')
+      
+      if (!token) {
+        toast.error('Не авторизован')
+        router.push('/admin/login')
+        return
+      }
+      
       const response = await fetch(`/api/admin/bookings/${params.id}`, {
         method: 'PUT',
         headers: {
@@ -174,13 +187,24 @@ export default function EditBooking() {
         body: JSON.stringify(updates)
       })
 
-      if (!response.ok) throw new Error('Ошибка обновления')
+      if (response.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        router.push('/admin/login')
+        return
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || errorData.details || 'Ошибка обновления')
+      }
 
       const data = await response.json()
       setBooking(data.booking)
       toast.success('Обновлено!')
-    } catch (error) {
-      toast.error('Ошибка обновления')
+    } catch (error: any) {
+      console.error('Update error:', error)
+      toast.error(error.message || 'Ошибка обновления')
     } finally {
       setSaving(false)
     }
@@ -194,8 +218,8 @@ export default function EditBooking() {
       middleName: editForm.middleName || null,
       flightNumber: editForm.flightNumber,
       departureDate: new Date(editForm.departureDate).toISOString(),
-      departureTime: new Date(`${editForm.departureDate}T${editForm.departureTime}`).toISOString(),
-      arrivalTime: new Date(`${editForm.departureDate}T${editForm.arrivalTime}`).toISOString(),
+      departureTime: new Date(`${editForm.departureDate}T${editForm.departureTime}:00`).toISOString(),
+      arrivalTime: new Date(`${editForm.departureDate}T${editForm.arrivalTime}:00`).toISOString(),
       originCity: editForm.originCity,
       originCode: editForm.originCode.toUpperCase(),
       destinationCity: editForm.destinationCity,
@@ -273,7 +297,11 @@ export default function EditBooking() {
   }
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ru-RU')
+    try {
+      return new Date(dateString).toLocaleString('ru-RU')
+    } catch {
+      return '—'
+    }
   }
 
   if (loading) {
@@ -446,9 +474,7 @@ export default function EditBooking() {
                   Установите задержку рейса. Отель можно добавить отдельно на вкладке &quot;Отель&quot;.
                 </p>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Задержан до
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Задержан до</label>
                   <input
                     type="datetime-local"
                     value={delayedUntil}
@@ -465,9 +491,7 @@ export default function EditBooking() {
                 <div className="bg-red-50 p-4 rounded-lg">
                   <p className="text-red-800 font-medium">Рейс задержан</p>
                   {booking.delayedUntil && (
-                    <p className="text-red-600 mt-1">
-                      До: {formatDateTime(booking.delayedUntil)}
-                    </p>
+                    <p className="text-red-600 mt-1">До: {formatDateTime(booking.delayedUntil)}</p>
                   )}
                 </div>
                 <button
@@ -490,9 +514,7 @@ export default function EditBooking() {
                 Информация об отеле добавляется отдельно от задержки рейса.
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Адрес отеля
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Адрес отеля</label>
                 <input
                   type="text"
                   value={hotelAddress}
@@ -502,9 +524,7 @@ export default function EditBooking() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Номер в отеле
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Номер в отеле</label>
                 <input
                   type="text"
                   value={hotelRoom}
@@ -545,26 +565,11 @@ export default function EditBooking() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Город *</label>
-                    <input
-                      type="text"
-                      value={divertedToCity}
-                      onChange={(e) => setDivertedToCity(e.target.value)}
-                      className="input-field"
-                      placeholder="Казань"
-                      required
-                    />
+                    <input type="text" value={divertedToCity} onChange={(e) => setDivertedToCity(e.target.value)} className="input-field" placeholder="Казань" required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Код ИАТА *</label>
-                    <input
-                      type="text"
-                      value={divertedToCode}
-                      onChange={(e) => setDivertedToCode(e.target.value.toUpperCase())}
-                      className="input-field"
-                      placeholder="KZN"
-                      maxLength={3}
-                      required
-                    />
+                    <input type="text" value={divertedToCode} onChange={(e) => setDivertedToCode(e.target.value.toUpperCase())} className="input-field" placeholder="KZN" maxLength={3} required />
                   </div>
                 </div>
                 <button type="submit" disabled={saving} className="btn-primary w-full">
@@ -575,15 +580,9 @@ export default function EditBooking() {
               <div className="space-y-3">
                 <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                   <p className="text-orange-800 font-medium">Самолёт перенаправлен</p>
-                  <p className="text-orange-700 mt-1">
-                    Аэропорт: {booking.divertedToCity} ({booking.divertedToCode})
-                  </p>
+                  <p className="text-orange-700 mt-1">Аэропорт: {booking.divertedToCity} ({booking.divertedToCode})</p>
                 </div>
-                <button
-                  onClick={() => updateBookingStatus({ isDiverted: false, divertedToCity: null, divertedToCode: null })}
-                  disabled={saving}
-                  className="btn-secondary w-full"
-                >
+                <button onClick={() => updateBookingStatus({ isDiverted: false, divertedToCity: null, divertedToCode: null })} disabled={saving} className="btn-secondary w-full">
                   Отменить перенаправление
                 </button>
               </div>
@@ -597,29 +596,14 @@ export default function EditBooking() {
             {!booking.isDistress ? (
               <form onSubmit={handleDistressSubmit} className="space-y-4">
                 <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-red-800 text-sm font-medium">
-                    Внимание! Это создаст экстренное уведомление для пассажиров!
-                  </p>
+                  <p className="text-red-800 text-sm font-medium">Внимание! Это создаст экстренное уведомление для пассажиров!</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Код сигнала *
-                  </label>
-                  <input
-                    type="text"
-                    value={distressCode}
-                    onChange={(e) => setDistressCode(e.target.value.toUpperCase())}
-                    className="input-field text-lg font-mono"
-                    placeholder="7700"
-                    maxLength={4}
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    7700 - общая тревога, 7600 - отказ связи, 7500 - захват
-                  </p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Код сигнала *</label>
+                  <input type="text" value={distressCode} onChange={(e) => setDistressCode(e.target.value.toUpperCase())} className="input-field text-lg font-mono" placeholder="7700" maxLength={4} required />
+                  <p className="text-xs text-gray-500 mt-1">7700 - общая тревога, 7600 - отказ связи, 7500 - захват</p>
                 </div>
-                <button type="submit" disabled={saving} 
-                  className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">
+                <button type="submit" disabled={saving} className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">
                   ⚠ ПОДАТЬ СИГНАЛ БЕДСТВИЯ
                 </button>
               </form>
@@ -629,11 +613,7 @@ export default function EditBooking() {
                   <p className="text-2xl font-bold">⚠️ СИГНАЛ БЕДСТВИЯ АКТИВЕН</p>
                   <p className="text-xl font-mono mt-2">Код: {booking.distressCode}</p>
                 </div>
-                <button
-                  onClick={() => updateBookingStatus({ isDistress: false, distressCode: null })}
-                  disabled={saving}
-                  className="btn-secondary w-full"
-                >
+                <button onClick={() => updateBookingStatus({ isDistress: false, distressCode: null })} disabled={saving} className="btn-secondary w-full">
                   Отменить сигнал бедствия
                 </button>
               </div>
@@ -647,15 +627,8 @@ export default function EditBooking() {
             {!booking.hasDeparted ? (
               <form onSubmit={handleDepartureSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Фактическое время вылета
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={actualDeparture}
-                    onChange={(e) => setActualDeparture(e.target.value)}
-                    className="input-field"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Фактическое время вылета</label>
+                  <input type="datetime-local" value={actualDeparture} onChange={(e) => setActualDeparture(e.target.value)} className="input-field" />
                 </div>
                 <button type="submit" disabled={saving} className="btn-primary w-full">
                   Рейс вылетел
@@ -666,16 +639,10 @@ export default function EditBooking() {
                 <div className="bg-purple-50 p-4 rounded-lg">
                   <p className="text-purple-800 font-medium">Рейс вылетел</p>
                   {booking.actualDeparture && (
-                    <p className="text-purple-600 mt-1">
-                      Время: {formatDateTime(booking.actualDeparture)}
-                    </p>
+                    <p className="text-purple-600 mt-1">Время: {formatDateTime(booking.actualDeparture)}</p>
                   )}
                 </div>
-                <button
-                  onClick={() => updateBookingStatus({ hasDeparted: false, actualDeparture: null })}
-                  disabled={saving}
-                  className="btn-secondary w-full"
-                >
+                <button onClick={() => updateBookingStatus({ hasDeparted: false, actualDeparture: null })} disabled={saving} className="btn-secondary w-full">
                   Отменить отметку о вылете
                 </button>
               </div>
@@ -688,9 +655,7 @@ export default function EditBooking() {
             <h2 className="text-xl font-semibold mb-4">📢 История уведомлений</h2>
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {booking.notifications.map((n: any) => (
-                <div key={n.id} className={`p-3 rounded-lg ${
-                  n.type === 'flight_distress' ? 'bg-red-100 border border-red-300' : 'bg-gray-50'
-                }`}>
+                <div key={n.id} className={`p-3 rounded-lg ${n.type === 'flight_distress' ? 'bg-red-100 border border-red-300' : 'bg-gray-50'}`}>
                   <p className="text-sm">{n.message}</p>
                   <p className="text-xs text-gray-500 mt-1">{formatDateTime(n.createdAt)}</p>
                 </div>
@@ -706,9 +671,7 @@ export default function EditBooking() {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">✏️ Редактирование бронирования</h3>
-                <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
-                  ×
-                </button>
+                <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
               </div>
               
               <form onSubmit={handleEditSubmit} className="space-y-4">
