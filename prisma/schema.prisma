@@ -47,6 +47,14 @@ model Booking {
   hotelAddress    String?
   hotelRoom       String?
   
+  // Новые поля
+  isDiverted      Boolean        @default(false)
+  divertedToCity  String?
+  divertedToCode  String?
+  
+  isDistress      Boolean        @default(false)
+  distressCode    String?
+  
   notifications   Notification[]
   
   createdAt       DateTime       @default(now())
